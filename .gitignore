@@ -1,0 +1,5 @@
+src/kaitai/kaitai_performance_evaluation
+**CMakeFiles*
+*.cmake
+**Makefile
+**CMakeCache.txt
