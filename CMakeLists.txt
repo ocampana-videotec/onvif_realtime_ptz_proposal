@@ -6,7 +6,7 @@ project (onvif_realtime_ptz_proposal
 )
 
 # Kaitai generally works best with C++11 or higher (C++17 recommended)
-set (CMAKE_CXX_STANDARD 17)
+set (CMAKE_CXX_STANDARD 23)
 set (CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_library (KAITAI_RUNTIME kaitai_struct_cpp_stl_runtime)
