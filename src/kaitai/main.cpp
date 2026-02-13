@@ -164,6 +164,7 @@ int main (int argc, char *argv[])
 
     std::cout << "Kaitai took " << elapsed_time_kaitai << "seconds to execute." << std::endl;
     std::cout << "Average iteation time " << (elapsed_time_kaitai / ITERATIONS) << std::endl;
+    std::cout << "Struct is " << (elapsed_time_kaitai / elapsed_time_struct) << " times faster." << std::endl;
 
     return 0;
 }
