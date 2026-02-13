@@ -5,4 +5,7 @@ add_custom_command (
 
 add_executable (kaitai_performance_evaluation	main.cpp
 						onvif_realtime_ptz.cpp onvif_realtime_ptz.h)
+
 target_link_libraries (kaitai_performance_evaluation PUBLIC ${KAITAI_RUNTIME})
+
+target_compile_options (kaitai_performance_evaluation PRIVATE -g)

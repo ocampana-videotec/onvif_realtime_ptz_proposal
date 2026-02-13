@@ -8,6 +8,7 @@ class onvif_realtime_ptz_t;
 #include "kaitai/kaitaistruct.h"
 #include <stdint.h>
 #include <set>
+#include <vector>
 
 #if KAITAI_STRUCT_VERSION < 11000L
 #error "Incompatible Kaitai Struct C++/STL API: version 0.11 or later is required"
@@ -24,11 +25,11 @@ class onvif_realtime_ptz_t : public kaitai::kstruct {
 
 public:
     class continuous_move_payload_t;
-    class get_status_payload_t;
+    class send_status_payload_t;
 
     enum cmd_type_t {
-        CMD_TYPE_CONTINUOUS_MOVE = 1,
-        CMD_TYPE_GET_STATUS = 2
+        CMD_TYPE_SEND_STATUS = 1,
+        CMD_TYPE_CONTINUOUS_MOVE = 2
     };
     static bool _is_defined_cmd_type_t(cmd_type_t v);
 
@@ -61,39 +62,42 @@ public:
         ~continuous_move_payload_t();
 
     private:
-        uint16_t m_timeout;
-        float m_velocity_pan;
-        float m_velocity_tilt;
-        float m_velocity_zoom;
+        uint32_t m_timeout;
+        float m_pan_speed;
+        float m_tilt_speed;
+        std::vector<float>* m_zoom_speed;
+        std::vector<float>* m_focus_speed;
         onvif_realtime_ptz_t* m__root;
         onvif_realtime_ptz_t* m__parent;
 
     public:
-        uint16_t timeout() const { return m_timeout; }
-        float velocity_pan() const { return m_velocity_pan; }
-        float velocity_tilt() const { return m_velocity_tilt; }
-        float velocity_zoom() const { return m_velocity_zoom; }
+        uint32_t timeout() const { return m_timeout; }
+        float pan_speed() const { return m_pan_speed; }
+        float tilt_speed() const { return m_tilt_speed; }
+        std::vector<float>* zoom_speed() const { return m_zoom_speed; }
+        std::vector<float>* focus_speed() const { return m_focus_speed; }
         onvif_realtime_ptz_t* _root() const { return m__root; }
         onvif_realtime_ptz_t* _parent() const { return m__parent; }
     };
 
-    class get_status_payload_t : public kaitai::kstruct {
+    class send_status_payload_t : public kaitai::kstruct {
 
     public:
 
-        get_status_payload_t(kaitai::kstream* p__io, onvif_realtime_ptz_t* p__parent = 0, onvif_realtime_ptz_t* p__root = 0);
+        send_status_payload_t(kaitai::kstream* p__io, onvif_realtime_ptz_t* p__parent = 0, onvif_realtime_ptz_t* p__root = 0);
 
     private:
         void _read();
         void _clean_up();
 
     public:
-        ~get_status_payload_t();
+        ~send_status_payload_t();
 
     private:
         float m_pan_position;
         float m_tilt_position;
-        float m_zoom_position;
+        std::vector<float>* m_zoom_position;
+        std::vector<float>* m_focus_position;
         uint64_t m_timestamp_ms;
         onvif_realtime_ptz_t* m__root;
         onvif_realtime_ptz_t* m__parent;
@@ -101,7 +105,8 @@ public:
     public:
         float pan_position() const { return m_pan_position; }
         float tilt_position() const { return m_tilt_position; }
-        float zoom_position() const { return m_zoom_position; }
+        std::vector<float>* zoom_position() const { return m_zoom_position; }
+        std::vector<float>* focus_position() const { return m_focus_position; }
 
         /**
          * Milliseconds since 1970-01-01 00:00:00
