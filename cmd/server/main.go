@@ -17,13 +17,13 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"latency_poc/internal/latencypb"
+	"latency_poc/internal/ptzpb"
 )
 
-type latencyMessage struct {
-	ID                 uint64 `json:"id"`
-	SentAtNs           int64  `json:"sent_at_ns"`
-	ClientReceivedAtNs int64  `json:"client_received_at_ns,omitempty"`
+type ptzCommand struct {
+	ID      uint64 `json:"id"`
+	Command string `json:"command"`
+	Value   int32  `json:"value"`
 }
 
 type serverState struct {
@@ -32,8 +32,7 @@ type serverState struct {
 	data  *webrtc.DataChannel
 
 	grpcMutex  sync.Mutex
-	grpcStream latencypb.LatencyService_MeasureServer
-	grpcSendMu sync.Mutex
+	grpcStream ptzpb.PTZService_SendCommandServer
 }
 
 func main() {
@@ -73,7 +72,7 @@ func startGrpcServer(addr string, state *serverState) error {
 	}
 
 	grpcServer := grpc.NewServer()
-	latencypb.RegisterLatencyServiceServer(grpcServer, &latencyGrpcServer{state: state})
+	ptzpb.RegisterPTZServiceServer(grpcServer, &ptzGrpcServer{state: state})
 	log.Printf("gRPC listening on %s", addr)
 	return grpcServer.Serve(listener)
 }
@@ -104,7 +103,7 @@ func (s *serverState) handleOffer(stunURL string) http.HandlerFunc {
 
 		ordered := false
 		maxRetransmits := uint16(0)
-		dc, err := pc.CreateDataChannel("latency", &webrtc.DataChannelInit{
+		dc, err := pc.CreateDataChannel("ptz", &webrtc.DataChannelInit{
 			Ordered:        &ordered,
 			MaxRetransmits: &maxRetransmits,
 		})
@@ -123,21 +122,13 @@ func (s *serverState) handleOffer(stunURL string) http.HandlerFunc {
 		})
 
 		dc.OnMessage(func(msg webrtc.DataChannelMessage) {
-			var payload latencyMessage
-			if err := json.Unmarshal(msg.Data, &payload); err != nil {
-				log.Printf("failed to parse reply: %v", err)
+			var cmd ptzCommand
+			if err := json.Unmarshal(msg.Data, &cmd); err != nil {
+				log.Printf("failed to parse PTZ command: %v", err)
 				return
 			}
-			now := time.Now().UnixNano()
-			rtt := time.Duration(now - payload.SentAtNs)
-			log.Printf("id=%d rtt=%s client_received_at_ns=%d", payload.ID, rtt, payload.ClientReceivedAtNs)
-			s.sendGrpcResponse(&latencypb.LatencyResponse{
-				Id:                 payload.ID,
-				SentAtNs:           payload.SentAtNs,
-				ClientReceivedAtNs: payload.ClientReceivedAtNs,
-				ServerReceivedAtNs: now,
-				RttNs:              now - payload.SentAtNs,
-			})
+			log.Printf("Received PTZ command from client: ID=%d, Command=%s, Value=%d", cmd.ID, cmd.Command, cmd.Value)
+			s.forwardPTZCommand(&cmd)
 		})
 
 		offer, err := pc.CreateOffer(nil)
@@ -207,12 +198,12 @@ func (s *serverState) handleAnswer() http.HandlerFunc {
 	}
 }
 
-type latencyGrpcServer struct {
-	latencypb.UnimplementedLatencyServiceServer
+type ptzGrpcServer struct {
+	ptzpb.UnimplementedPTZServiceServer
 	state *serverState
 }
 
-func (g *latencyGrpcServer) Measure(stream latencypb.LatencyService_MeasureServer) (err error) {
+func (g *ptzGrpcServer) SendCommand(stream ptzpb.PTZService_SendCommandServer) (err error) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			log.Printf("grpc handler panic: %v\n%s", recovered, debug.Stack())
@@ -231,32 +222,19 @@ func (g *latencyGrpcServer) Measure(stream latencypb.LatencyService_MeasureServe
 	}
 	defer g.state.clearGrpcStream(stream)
 
+	// Just keep the stream alive
 	for {
-		req, recvErr := stream.Recv()
+		_, recvErr := stream.Recv()
 		if recvErr == io.EOF {
 			return nil
 		}
 		if recvErr != nil {
 			return recvErr
 		}
-		for {
-			sendErr := g.state.sendGrpcRequest(req)
-			if sendErr == nil {
-				break
-			}
-			if status.Code(sendErr) != codes.Unavailable {
-				return sendErr
-			}
-			select {
-			case <-time.After(50 * time.Millisecond):
-			case <-stream.Context().Done():
-				return stream.Context().Err()
-			}
-		}
 	}
 }
 
-func (s *serverState) setGrpcStream(stream latencypb.LatencyService_MeasureServer) error {
+func (s *serverState) setGrpcStream(stream ptzpb.PTZService_SendCommandServer) error {
 	s.grpcMutex.Lock()
 	defer s.grpcMutex.Unlock()
 	if s.grpcStream != nil {
@@ -265,48 +243,38 @@ func (s *serverState) setGrpcStream(stream latencypb.LatencyService_MeasureServe
 		}
 	}
 	s.grpcStream = stream
+	log.Println("gRPC stream established")
 	return nil
 }
 
-func (s *serverState) clearGrpcStream(stream latencypb.LatencyService_MeasureServer) {
+func (s *serverState) clearGrpcStream(stream ptzpb.PTZService_SendCommandServer) {
 	s.grpcMutex.Lock()
 	defer s.grpcMutex.Unlock()
 	if s.grpcStream == stream {
 		s.grpcStream = nil
+		log.Println("gRPC stream cleared")
 	}
 }
 
-func (s *serverState) sendGrpcRequest(req *latencypb.LatencyRequest) error {
-	s.mutex.Lock()
-	dc := s.data
-	s.mutex.Unlock()
-	if dc == nil {
-		return status.Error(codes.Unavailable, "data channel not ready")
-	}
-	payload := latencyMessage{
-		ID:       req.GetId(),
-		SentAtNs: req.GetSentAtNs(),
-	}
-	data, err := json.Marshal(payload)
-	if err != nil {
-		return status.Error(codes.Internal, err.Error())
-	}
-	if err := dc.Send(data); err != nil {
-		return status.Error(codes.Unavailable, err.Error())
-	}
-	return nil
-}
-
-func (s *serverState) sendGrpcResponse(resp *latencypb.LatencyResponse) {
+func (s *serverState) forwardPTZCommand(cmd *ptzCommand) {
 	s.grpcMutex.Lock()
 	stream := s.grpcStream
 	s.grpcMutex.Unlock()
+
 	if stream == nil {
+		log.Println("No gRPC stream available, command dropped")
 		return
 	}
-	s.grpcSendMu.Lock()
-	defer s.grpcSendMu.Unlock()
-	if err := stream.Send(resp); err != nil {
-		log.Printf("grpc send error: %v", err)
+
+	ptzCmd := &ptzpb.PTZCommand{
+		Id:      cmd.ID,
+		Command: cmd.Command,
+		Value:   cmd.Value,
+	}
+
+	if err := stream.Send(ptzCmd); err != nil {
+		log.Printf("Failed to forward PTZ command to gRPC: %v", err)
+	} else {
+		log.Printf("Forwarded PTZ command to C++ client: ID=%d, Command=%s, Value=%d", cmd.ID, cmd.Command, cmd.Value)
 	}
 }

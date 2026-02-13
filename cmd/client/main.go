@@ -5,21 +5,25 @@ import (
 	"encoding/json"
 	"flag"
 	"log"
+	"math/rand"
 	"net/http"
 	"time"
 
 	"github.com/pion/webrtc/v4"
 )
 
-type latencyMessage struct {
-	ID                 uint64 `json:"id"`
-	SentAtNs           int64  `json:"sent_at_ns"`
-	ClientReceivedAtNs int64  `json:"client_received_at_ns,omitempty"`
+type ptzCommand struct {
+	ID      uint64 `json:"id"`
+	Command string `json:"command"`
+	Value   int32  `json:"value"`
 }
+
+var ptzCommands = []string{"pan_left", "pan_right", "tilt_up", "tilt_down", "zoom_in", "zoom_out", "stop"}
 
 func main() {
 	signalURL := flag.String("signal", "http://localhost:8080", "Server signaling base URL")
 	stun := flag.String("stun", "stun:stun.l.google.com:19302", "STUN server URL")
+	interval := flag.Duration("interval", 1*time.Second, "Interval between PTZ commands")
 	flag.Parse()
 
 	config := webrtc.Configuration{
@@ -35,21 +39,13 @@ func main() {
 	pc.OnDataChannel(func(dc *webrtc.DataChannel) {
 		log.Printf("data channel received: %s", dc.Label())
 
+		dc.OnOpen(func() {
+			log.Println("data channel opened, starting PTZ command sender")
+			go sendPTZCommands(dc, *interval)
+		})
+
 		dc.OnMessage(func(msg webrtc.DataChannelMessage) {
-			var payload latencyMessage
-			if err := json.Unmarshal(msg.Data, &payload); err != nil {
-				log.Printf("failed to parse message: %v", err)
-				return
-			}
-			payload.ClientReceivedAtNs = time.Now().UnixNano()
-			response, err := json.Marshal(payload)
-			if err != nil {
-				log.Printf("failed to marshal response: %v", err)
-				return
-			}
-			if err := dc.Send(response); err != nil {
-				log.Printf("send error: %v", err)
-			}
+			log.Printf("received message (ignored): %s", string(msg.Data))
 		})
 	})
 
@@ -83,6 +79,34 @@ func main() {
 	}
 
 	select {}
+}
+
+func sendPTZCommands(dc *webrtc.DataChannel, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	var id uint64
+
+	for range ticker.C {
+		id++
+		cmd := ptzCommand{
+			ID:      id,
+			Command: ptzCommands[rand.Intn(len(ptzCommands))],
+			Value:   rand.Int31n(101), // 0-100
+		}
+
+		data, err := json.Marshal(cmd)
+		if err != nil {
+			log.Printf("failed to marshal command: %v", err)
+			continue
+		}
+
+		log.Printf("Sending PTZ command: ID=%d, Command=%s, Value=%d", cmd.ID, cmd.Command, cmd.Value)
+
+		if err := dc.Send(data); err != nil {
+			log.Printf("failed to send: %v", err)
+		}
+	}
 }
 
 func fetchOffer(baseURL string) (webrtc.SessionDescription, error) {

@@ -1,6 +1,12 @@
-# WebRTC Data Channel Latency (Pion)
+# WebRTC PTZ Command Forwarding (Pion)
 
-Go server/client measure WebRTC data channel latency and expose a gRPC service so a C++ app can drive the RTT path.
+Go server/client system that forwards PTZ (Pan-Tilt-Zoom) commands from a WebRTC client through a Go server to a C++ application via gRPC.
+
+## Architecture
+
+1. **Go WebRTC Client** - Generates random PTZ commands and sends them to the server via WebRTC data channel
+2. **Go Server** - Receives PTZ commands from the WebRTC client and forwards them to the C++ app via gRPC
+3. **C++ gRPC Client** - Receives and logs PTZ commands
 
 ## Requirements
 - Go 1.22+
@@ -32,7 +38,7 @@ Or run directly:
 
 ```bash
 go run ./cmd/server -addr :8080 -grpc-addr :50051
-go run ./cmd/client -signal http://localhost:8080
+go run ./cmd/client -signal http://localhost:8080 -interval 1s
 ```
 
 ### Regenerate Protobuf Code (if proto changes)
@@ -57,12 +63,12 @@ Generate Go code from `proto/latency.proto`:
 cd latency_poc
 
 protoc --proto_path=proto \
-  --go_out=internal/latencypb --go_opt=paths=source_relative \
-  --go-grpc_out=internal/latencypb --go-grpc_opt=paths=source_relative \
+  --go_out=internal/ptzpb --go_opt=paths=source_relative \
+  --go-grpc_out=internal/ptzpb --go-grpc_opt=paths=source_relative \
   proto/latency.proto
 ```
 
-The generated files (`latency.pb.go` and `latency_grpc.pb.go`) will be created in `internal/latencypb/`.
+The generated files (`latency.pb.go` and `latency_grpc.pb.go`) will be created in `internal/ptzpb/`.
 
 After regeneration, rebuild the Go apps:
 
@@ -74,7 +80,7 @@ go build -o bin/client ./cmd/client
 
 ## Run
 
-Run order: start the Go server, then the Go WebRTC client, then the C++ gRPC client.
+Run order: start the Go server, then the C++ gRPC client, then the Go WebRTC client.
 
 Start the server (HTTP signaling + gRPC):
 
@@ -84,15 +90,23 @@ cd latency_poc
 go run ./cmd/server -addr :8080 -grpc-addr :50051
 ```
 
-In another terminal, start the client:
+In another terminal, start the C++ client to listen for PTZ commands:
+
+```bash
+cd latency_poc/cpp
+
+./build/latency_client --grpc_addr localhost:50051
+```
+
+In a third terminal, start the Go WebRTC client to send PTZ commands:
 
 ```bash
 cd latency_poc
 
-go run ./cmd/client -signal http://localhost:8080
+go run ./cmd/client -signal http://localhost:8080 -interval 1s
 ```
 
-The server prints RTT measurements as replies arrive.
+The client will send random PTZ commands (pan_left, pan_right, tilt_up, tilt_down, zoom_in, zoom_out, stop) with random values (0-100) at the configured interval.
 
 ## C++ gRPC Client
 
@@ -101,7 +115,6 @@ Prerequisites:
 ```bash
 sudo apt-get install -y protobuf-compiler libprotobuf-dev libgrpc++-dev protobuf-compiler-grpc
 ```
-
 
 Build the C++ app:
 
@@ -129,34 +142,34 @@ Prerequisites for cross-compilation:
 sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
 ```
 
-Run the C++ app (sends timestamps via gRPC, receives RTT responses):
+Run the C++ app:
 
 ```bash
 cd latency_poc/cpp
 
-./build/latency_client --grpc_addr localhost:50051 --interval_ms 1000
+./build/latency_client --grpc_addr localhost:50051
 ```
 
-Output includes `webrtc_rtt_ns` (server-measured data-channel RTT) and `end_to_end_rtt_ns` (C++ → Go server → Go client → Go server → C++).
+The C++ client will log each received PTZ command with its ID, command name, and value.
 
-The C++ client also writes a CSV file (default `rtt_stats.csv`).
+## Command Line Options
 
-```bash
-./build/latency_client --grpc_addr localhost:50051 --interval_ms 1000 --csv rtt_stats.csv
-```
+### Go Server
+- `-addr` - HTTP signaling address (default: `:8080`)
+- `-grpc-addr` - gRPC listen address (default: `:50051`)
+- `-stun` - STUN server URL (default: `stun:stun.l.google.com:19302`)
 
-Plot the RTTs from CSV:
+### Go Client
+- `-signal` - Server signaling base URL (default: `http://localhost:8080`)
+- `-stun` - STUN server URL (default: `stun:stun.l.google.com:19302`)
+- `-interval` - Interval between PTZ commands (default: `1s`)
 
-```bash
-python3 scripts/plot_rtt.py --csv rtt_stats.csv --out rtt_plot.png
-```
-
-Plot RTT histograms:
-
-```bash
-python3 scripts/plot_histogram.py --csv rtt_stats.csv --out rtt_hist.png
-```
+### C++ Client
+- `--grpc_addr` - gRPC server address (default: `localhost:50051`)
 
 ## Notes
 - The data channel is configured with `Ordered=false` and `MaxRetransmits=0` for minimal latency.
 - The server accepts a single gRPC stream and WebRTC client at a time for simplicity.
+- PTZ commands are: `pan_left`, `pan_right`, `tilt_up`, `tilt_down`, `zoom_in`, `zoom_out`, `stop`
+- Command values are random integers from 0-100
+
