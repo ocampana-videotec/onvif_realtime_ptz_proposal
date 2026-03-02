@@ -3,3 +3,4 @@ src/kaitai/kaitai_performance_evaluation
 *.cmake
 **Makefile
 **CMakeCache.txt
+src/flatbuffers/onvif_realtime_ptz_generated.h
