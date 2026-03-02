@@ -11,9 +11,6 @@
 #include "../onvif_realtime_ptz.h"
 #include "onvif_realtime_ptz.h"
 
-#define ITERATIONS 1000000
-#define VERBOSE 0
-
 static void float_to_be (_Float32 * f)
 {
     uint32_t raw_bits;

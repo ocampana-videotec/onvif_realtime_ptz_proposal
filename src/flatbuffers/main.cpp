@@ -8,9 +8,7 @@
 #include <endian.h>
 
 #include "onvif_realtime_ptz_generated.h"
-
-#define ITERATIONS 1000000
-#define VERBOSE 0
+#include "../onvif_realtime_ptz.h"
 
 static void float_to_be (_Float32 * f)
 {

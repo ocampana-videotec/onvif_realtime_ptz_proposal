@@ -14,4 +14,6 @@ find_library (KAITAI_RUNTIME kaitai_struct_cpp_stl_runtime)
 find_program (KTS kaitai-struct-compiler REQURED)
 find_program (FLATC flatc REQURED)
 
+add_definitions (-DITERATIONS=1000000 -DVERBOSE=0)
+
 subdirs (src)
