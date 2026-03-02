@@ -1,1 +1,1 @@
-subdirs(kaitai flatbuffers)
+subdirs(kaitai flatbuffers protobuffers)

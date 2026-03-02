@@ -5,3 +5,6 @@ src/kaitai/kaitai_performance_evaluation
 **CMakeCache.txt
 src/flatbuffers/onvif_realtime_ptz_generated.h
 src/flatbuffers/flatbuffers_performance_evaluation
+src/protobuffers/onvif_realtime_ptz.pb.cc
+src/protobuffers/onvif_realtime_ptz.pb.h
+src/protobuffers/protobuffers_performance_evaluation

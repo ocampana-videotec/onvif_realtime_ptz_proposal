@@ -10,9 +10,11 @@ set (CMAKE_CXX_STANDARD 23)
 set (CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_library (KAITAI_RUNTIME kaitai_struct_cpp_stl_runtime)
+find_library (PROTOBUF protobuf REQUIRED)
 
 find_program (KTS kaitai-struct-compiler REQURED)
 find_program (FLATC flatc REQURED)
+find_program (PROTOC protoc REQURED)
 
 add_definitions (-DITERATIONS=1000000 -DVERBOSE=0)
 

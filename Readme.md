@@ -1,1 +1,1 @@
-sudo apt install flatbuffers-compiler kaitai-struct-compiler libflatbuffers-dev
+sudo apt install flatbuffers-compiler kaitai-struct-compiler libflatbuffers-dev protobuf-compiler

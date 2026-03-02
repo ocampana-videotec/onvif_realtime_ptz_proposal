@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package onvif.realtime;
+
+message Float4 {
+  repeated float values = 1; // Used for zoom/focus (4 elements)
+}
+
+message ContinuousMovePayload {
+  uint32 timeout = 1;
+  float pan_speed = 2;
+  float tilt_speed = 3;
+  Float4 zoom_speed = 4;
+  Float4 focus_speed = 5;
+}
+
+message SendStatusPayload {
+  float pan_position = 1;
+  float tilt_position = 2;
+  Float4 zoom_position = 3;
+  Float4 focus_position = 4;
+  uint64 timestamp_ms = 5;
+}
+
+message PTZPacket {
+  uint32 magic = 1; // "OPTZ" (0x4F50545A = 1330664538)
+  
+  enum CommandType {
+    UNKNOWN = 0;
+    SEND_STATUS = 1;
+    CONTINUOUS_MOVE = 2;
+  }
+  CommandType command_id = 2;
+
+  // This replaces the switch/union logic
+  oneof payload {
+    SendStatusPayload status = 3;
+    ContinuousMovePayload move = 4;
+  }
+}
