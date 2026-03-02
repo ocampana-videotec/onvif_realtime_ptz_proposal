@@ -1,0 +1,44 @@
+namespace Onvif.Realtime;
+
+enum CommandType: byte { 
+  Unknown = 0,      // Fixes the compiler error
+  SendStatus = 1, 
+  ContinuousMove = 2 
+}
+
+struct Float4 {
+  val1: float;
+  val2: float;
+  val3: float;
+  val4: float;
+}
+
+table ContinuousMovePayload {
+  timeout: uint32;
+  pan_speed: float;
+  tilt_speed: float;
+  zoom_speed: Float4;
+  focus_speed: Float4;
+}
+
+table SendStatusPayload {
+  pan_position: float;
+  tilt_position: float;
+  zoom_position: Float4;
+  focus_position: Float4;
+  timestamp_ms: uint64;
+}
+
+union Payload {
+  SendStatusPayload,
+  ContinuousMovePayload
+}
+
+table PTZPacket {
+  magic: uint32 = 1330664538; 
+  command_id: CommandType = Unknown; // Explicitly set the default
+  payload: Payload;
+}
+
+root_type PTZPacket;
+file_identifier "OPTZ";

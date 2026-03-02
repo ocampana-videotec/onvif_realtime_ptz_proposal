@@ -12,5 +12,6 @@ set (CMAKE_CXX_STANDARD_REQUIRED ON)
 find_library (KAITAI_RUNTIME kaitai_struct_cpp_stl_runtime)
 
 find_program (KTS kaitai-struct-compiler REQURED)
+find_program (FLATC flatc REQURED)
 
 subdirs (src)
